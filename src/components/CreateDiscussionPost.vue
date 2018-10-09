@@ -2,8 +2,7 @@
   <discussion-post-wrapper>
     <div :class="{post: true, 'is-collapsed': !isActive}">
       <user-avatar :user="post.owner"></user-avatar>
-      <div class="body" @drop="onDrop"
-          @dragover="dragInBox = true;" @dragleave="dragInBox = false;">
+      <div class="body" @drop="onDrop">
         <input class="title" v-if="isOriginalPost"
           ref="title" type="text" placeholder="Title" v-model="title">
         <div class="title" v-else>
@@ -18,23 +17,10 @@
           @submit="postValue"
           @escape="deactivate"
         />
-        <div class="attachments" v-if="attachments.length">
-          <div class="attachment" v-for="(attachment, index) in attachments" :key="index">
-            <img class="delete-icon" width="16px" src="@/assets/deleteIcon.svg" alt="Delete Icon" v-on:click="handleDelete(index)">
-            <img class="attachment-img" v-if="attachment.base64" :style="{ 'background-image': 'url(' + attachment.base64 +')' }" />
-            <div class="preview-name" v-else>
-              <img src="@/assets/paperclip.svg" alt="Delete Icon">
-              <div> {{ attachment.name }} </div>
-            </div>
-          </div>
-        </div>
+        <AttachmentBox v-if="attachments.length" :attachments="attachments" @attachmentDelete="handleDelete"/>
         <div class="action" v-if="isActive">
           <span>Cmd + Enter to post</span>
-          <div class="message">Drag and Drop files to upload</div>
-          <button class="feedback-btn" @click="postValue"
-            :class="[ dragging ? 'drag-event' : 'post-button', { 'on-drag' : dragInBox } ]">
-            <span>Drop now to upload</span>
-          </button>
+          <div class="message"> {{ currMessage }} </div>
         </div>
         <div class="action" v-if="!isActive" style="margin-top: 0.5rem;">
           <span @click="activate">Add to this discussion</span>
@@ -48,13 +34,15 @@
 import DiscussionPostWrapper from '@/components/DiscussionPostWrapper';
 import UserAvatar from '@/components/UserAvatar';
 import ContentEditor from './ContentEditor';
+import AttachmentBox from './AttachmentBox';
 
 export default {
   name: 'CreateDiscussionPost',
   components: {
     DiscussionPostWrapper,
     UserAvatar,
-    ContentEditor
+    ContentEditor,
+    AttachmentBox
   },
   props: ['post', 'is-original-post', 'inactive'],
   data() {
@@ -62,8 +50,7 @@ export default {
       title: '',
       content: '',
       attachments: [],
-      dragging: false,
-      dragInBox: false,
+      currMessage: 'Drag and Drop files to upload',
       active: this.inactive === undefined || this.inactive === false,
     };
   },
@@ -75,8 +62,7 @@ export default {
   methods: {
     onDrop(event) {
       event.preventDefault();
-      this.dragging = false;
-      this.dragInBox = false;
+      this.currMessage = 'Drag and drop files to upload'
       Array.from(event.dataTransfer.files).forEach(file => {
         if(!this.attachments.some( f => f.name === file.name )){ // Check if already attached
           if(file.type.match('image.*')){ //Generate preview using base64 string
@@ -120,16 +106,21 @@ export default {
     }
     document.addEventListener('dragover', (e) => {
       e.preventDefault()
-      this.dragging = true;
+      this.currMessage = 'Drop here to upload'
+    })
+    document.addEventListener('dragleave', (e) => {
+      this.currMessage = 'Drag and drop files to upload'
+      e.preventDefault()
     })
     document.addEventListener('drop', (e) => {
-      this.dragging = false;
+      this.currMessage = 'Drag and drop files to upload'
       e.preventDefault()
     })
   },
   beforeDestroy() {
     document.removeEventListener('drop', () => {});
     document.removeEventListener('dragover', () => {});
+    document.removeEventListener('dragleave', () => {});
   }
 };
 </script>
@@ -152,22 +143,6 @@ input.title {
   position: relative;
 }
 
-.feedback-btn{
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px white, 0 0 0 2px #ebebeb;
-  width: 2.5rem;
-  height: 2.5rem;
-  overflow: hidden;
-  color: white;
-  position: absolute;
-  right: 0px;
-  bottom: 3.2rem;
-}
-
-.feedback-btn:focus{
-  outline: 0;
-}
-
 .feedback-btn > span{
   margin-left: 1.6rem;
   font-size: 0.9rem;
@@ -175,32 +150,6 @@ input.title {
   white-space: nowrap;
   opacity: 0;
   transition: opacity 0.5s cubic-bezier(.34,.6,.12,.99) 0.1s;
-}
-
-.post-button{
-  background: #7ed321 url('../assets/postButton.svg') no-repeat center;
-  cursor: pointer;
-  transition: width 0.3s, height 0.3s, bottom 0.3s;
-}
-.post-button:hover {
-  width: 3rem;
-  height: 3rem;
-  bottom: 3rem;
-}
-
-.drag-event{
-  background: #7ed321 url('../assets/upload.svg') no-repeat center;
-  cursor: pointer;
-  transition: width 0.6s, border-radius 0.3s cubic-bezier(0.47, 0, 0.745, 0.715), background-position 0.1s;
-}
-
-.on-drag{
-  background-position: 1rem;
-  border-radius: 5.5rem;
-  width: 13rem;
-}
-.on-drag > span{
-  opacity: 1;
 }
 
 textarea.content {
@@ -219,55 +168,10 @@ textarea.content::placeholder {
   color: var(--text-grey);
 }
 
-.attachments{
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-}
-.attachment{
-  position: relative;
-  margin: 1px;
-  margin-left: 0px;
-  min-width: 120px;
-  max-height: 120px;
-  box-shadow: 0 0 0 1px white, 0 0 0 2px #ebebeb;
-}
-
-.attachment-img{
-  width: 120px;
-  height: 120px;
-  background-position: center center;
-  background-repeat: no-repeat;
-  overflow: hidden;
-}
-
 .message{
   color: var(--text-grey);
   font-size: 1.2rem;
   font-weight: 300;
   cursor: pointer;
-}
-
-.delete-icon{
-  background-color: var(--light-bg); 
-  position: absolute;
-  right: 0;
-}
-.preview-name{
-  width: 100%;
-  height: 40px;
-  color: var(--text-grey);
-  font-weight: 550;
-  font-family: 'Roboto Slab', serif;
-  display: flex;
-  flex-direction: row;
-}
-.preview-name > img{
-  margin: 0.6rem;
-}
-.preview-name > div{
-  white-space: nowrap;
-  margin: 0.75rem;
-  margin-right: 24px;
 }
 </style>
